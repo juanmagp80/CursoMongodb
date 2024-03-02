@@ -67,27 +67,32 @@ const crear = async (req, res) => {
 
 // Devolver una respuesta
 
-const listar = async (req, res) => {
-  try {
-    // Find
-    const articulos = await Articulo.find({}).sort({ fecha: -1 });
+const uno = (req, res) => {
+  // Recoger un id por la url
+  let id = req.params.id;
 
-    if (!articulos || articulos.length === 0) {
-      return res.status(404).json({
-        status: "error",
-        message: "No se han encontrado artículos",
+  // Buscar artículo
+  Articulo.findById(id)
+    .then((articulo) => {
+      // Si no existe, devolver error
+      if (!articulo) {
+        return res.status(400).json({
+          status: "Error",
+          mensaje: "No se ha encontrado el artículo",
+        });
+      }
+
+      // Devolver resultado
+      return res.status(200).json({
+        status: "Success",
+        articulo,
       });
-    }
-
-    return res.status(200).send({
-      status: "success",
-      articulos,
+    })
+    .catch((error) => {
+      return res.status(400).json({
+        status: "Error",
+        mensaje: "Ha ocurrido un error al buscar el artículo",
+      });
     });
-  } catch (error) {
-    return res.status(500).json({
-      status: "error",
-      message: "Error al listar los artículos",
-    });
-  }
 };
-module.exports = { test, curso, crear, listar };
+module.exports = { test, curso, crear, uno };
