@@ -1,6 +1,8 @@
 const { __esModule } = require("validator/lib/isFloat");
-const validator = require("validator");
 const Articulo = require("../modelos/Articulo"); // importar el modelo de articulo
+const { validarArticulo } = require("../helpers/validar");
+const fs = require("fs");
+const path = require("path");
 
 const test = (req, res) => {
   return res.status(200).json({
@@ -25,20 +27,15 @@ const curso = (req, res) => {
 const crear = async (req, res) => {
   // Recoger parametros por post
   let parametros = req.body;
+  console.log(parametros);
   // Validar datos (validar con express validator)
   try {
-    let validar_titulo =
-      !validator.isEmpty(parametros.titulo) &&
-      validator.isLength(parametros.titulo, { min: 5, max: 100 });
-    let validar_contenido = !validator.isEmpty(parametros.contenido);
-
-    if (!validar_titulo || !validar_contenido) {
-      throw new Error("Todos los campos son obligatorios");
-    }
+    validarArticulo(parametros);
+    console.log(validarArticulo(parametros));
   } catch (error) {
     return res.status(400).json({
       status: "error",
-      message: "Faltan datos por enviar",
+      message: "faltan datos por enviar",
     });
   }
 
@@ -150,17 +147,14 @@ const editar = (req, res) => {
   let parametros = req.body;
   // Validamos datos
   try {
-    let validar_titulo = !validator.isEmpty(parametros.titulo);
-    let validar_contenido = !validator.isEmpty(parametros.contenido);
-    if (!validar_titulo || !validar_contenido) {
-      throw new Error("No se ha validado la info");
-    }
+    validarArticulo(parametros);
   } catch (error) {
     return res.status(400).json({
       status: "error",
-      mensaje: "Faltan datos por enviar",
+      message: "faltan datos por enviar",
     });
   }
+
   // Buscar y actualizar el articulo
   Articulo.findOneAndUpdate({ _id: editarId }, req.body, { new: true })
     .then((clienteActualizado) => {
@@ -183,4 +177,135 @@ const editar = (req, res) => {
       });
     });
 };
-module.exports = { test, curso, crear, uno, listar, borrar, editar };
+const subir = (req, res) => {
+  // configurar multer en la ruta
+  if (!req.file && !req.files) {
+    return res.status(404).json({
+      status: "error",
+      message: "peticion invalida",
+    });
+  }
+  // recoger el archivo de la peticion
+  console.log(req.file);
+  // nombre del archivo
+  let nombreArchivo = req.file.originalname;
+
+  // extension del archivo
+  let archivo_split = nombreArchivo.split(".");
+  let archivo_extension = archivo_split[1];
+
+  // comprobar extension
+  if (
+    archivo_extension != "png" &&
+    archivo_extension != "jpg" &&
+    archivo_extension != "jpeg" &&
+    archivo_extension != "gif"
+  ) {
+    fs.unlink(req.file.path, (error) => {
+      // borrar el archivo subido
+      if (error) throw error;
+      return res.status(400).json({
+        status: "error",
+        message: "La extension del archivo no es valida",
+      });
+    });
+  } else {
+    let editarId = req.params.id;
+    // Recoger datos del body
+    // Validamos datos
+
+    // Buscar y actualizar el articulo
+    Articulo.findOneAndUpdate(
+      { _id: editarId },
+      { imagen: req.file.filename },
+      { new: true }
+    )
+      .then((clienteActualizado) => {
+        if (!clienteActualizado) {
+          return res.status(500).json({
+            status: "error",
+            mensaje: "Error al actualizar",
+          });
+        }
+        // Devolver respuesta
+        return res.status(200).json({
+          status: "success",
+          cliente: clienteActualizado,
+        });
+      })
+      .catch((error) => {
+        return res.status(500).json({
+          status: "error",
+          mensaje: "Error al actualizar",
+        });
+      });
+  }
+};
+
+// si es valido, buscar el articulo, asignarle el nombre de la imagen y actualizarlo
+// devolver una respuesta
+
+// devolver una respuesta
+const imagen = (req, res) => {
+  let fichero = req.params.fichero;
+  let ruta_fisica = "./imagenes/articulos/" + fichero;
+
+  fs.stat(ruta_fisica, (error, existe) => {
+    if (existe) {
+      return res.sendFile(path.resolve(ruta_fisica));
+    } else {
+      return res.status(404).json({
+        status: "error",
+        message: "La imagen no existe",
+      });
+    }
+  });
+};
+
+const buscador = async (req, res) => {
+  try {
+    // Sacar el string de busqueda
+    let busqueda = req.params.busqueda;
+    // Find OR y puedes aplicar expresiones reg
+    // Orden
+    // Ejecutar consulta
+    let articulos = await Articulo.find({
+      $or: [
+        { titulo: { $regex: busqueda, $options: "i" } },
+        { contenido: { $regex: busqueda, $options: "i" } },
+      ],
+    })
+      .sort({ fecha: -1 })
+      .exec();
+
+    if (!articulos || articulos.length < 1) {
+      return res.status(404).json({
+        status: "error",
+        mensaje: "No hay articulos que coincidan",
+      });
+    }
+    return res.status(200).json({
+      status: "success",
+      articulos,
+    });
+    // Devolver resultados
+  } catch (error) {
+    return res.status(404).json({
+      status: "error",
+      mensaje: "Fallo la algo a la hora de realizarla busqueda ",
+    });
+  }
+};
+
+module.exports = {
+  test,
+  curso,
+  crear,
+  uno,
+  listar,
+  borrar,
+  editar,
+  subir,
+  imagen,
+  buscador,
+};
